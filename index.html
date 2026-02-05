@@ -199,7 +199,7 @@
             const tiltBtn = document.getElementById('tiltBtn');
             const muteBtn = document.getElementById('muteBtn');
             const dbgEl = document.getElementById('dbg');
-            dbgEl.textContent += `Version: 5`;
+            dbgEl.textContent += `Version: 6`;
 
             const BEST_KEY = "bee_runner_best_v1";
             let best = Number(localStorage.getItem(BEST_KEY) || 0);
@@ -299,7 +299,7 @@
             // Primary: DeviceOrientation (gamma left/right)
             // Primary: DeviceOrientation (gamma left/right)
             let lastGamma = 0;
-            let tiltSign = 1; // set to -1 if you want inverted
+            let tiltSign = -1; // set to -1 if you want inverted
 
             addEventListener('deviceorientation', (e) => {
                 if (!tiltEnabled) return;
