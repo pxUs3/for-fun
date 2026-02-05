@@ -432,58 +432,101 @@
             function drawBeeTopDown() {
                 const x = bee.x, y = bee.y, r = bee.r;
 
-                // body (top-down oval)
+                // ---------- Legs (draw FIRST, under body) ----------
+                ctx.strokeStyle = '#2a1a00';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+
+                const thoraxY = y - r * 0.15;
+                const legSpread = r * 0.55;
+
+                for (let side of [-1, 1]) {
+                    for (let i = -1;i <= 1;i++) {
+                        const ly = thoraxY + i * r * 0.35;
+                        const lx = x + side * r * 0.65;
+
+                        ctx.beginPath();
+                        ctx.moveTo(lx, ly);
+                        ctx.lineTo(
+                            lx + side * legSpread,
+                            ly + r * 0.35
+                        );
+                        ctx.stroke();
+                    }
+                }
+
+                // ---------- Abdomen ----------
                 ctx.beginPath();
-                ctx.ellipse(x, y, r * 0.85, r * 1.1, 0, 0, Math.PI * 2);
+                ctx.ellipse(x, y + r * 0.45, r * 0.85, r * 1.1, 0, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffd600';
                 ctx.fill();
 
-                // stripes
+                // Abdomen stripes
                 ctx.fillStyle = '#1c1c1c';
                 for (let i = -1;i <= 1;i++) {
                     ctx.beginPath();
-                    ctx.ellipse(x, y + i * 7, r * 0.75, r * 0.14, 0, 0, Math.PI * 2);
+                    ctx.ellipse(
+                        x,
+                        y + r * 0.45 + i * r * 0.45,
+                        r * 0.75,
+                        r * 0.14,
+                        0,
+                        0,
+                        Math.PI * 2
+                    );
                     ctx.fill();
                 }
 
-                // head (front)
+                // ---------- Thorax ----------
+                ctx.beginPath();
+                ctx.ellipse(x, y - r * 0.1, r * 0.7, r * 0.6, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffcc00';
+                ctx.fill();
+
+                // ---------- Head ----------
                 ctx.beginPath();
                 ctx.ellipse(x, y - r * 1.0, r * 0.55, r * 0.5, 0, 0, Math.PI * 2);
                 ctx.fillStyle = '#1c1c1c';
                 ctx.fill();
 
-                // tiny eyes
+                // Eyes
                 ctx.fillStyle = '#eaf0ff';
-                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 1.05, r * 0.08, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.arc(x + r * 0.2, y - r * 1.05, r * 0.08, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x - r * 0.2, y - r * 1.05, r * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x + r * 0.2, y - r * 1.05, r * 0.08, 0, Math.PI * 2);
+                ctx.fill();
 
-                // wings (left/right)
+                // ---------- Wings ----------
                 const flap = Math.sin(t * 18) * 0.25;
                 ctx.globalAlpha = 0.55;
                 ctx.fillStyle = '#cfe8ff';
-                ctx.beginPath();
-                ctx.ellipse(x - r * 0.95, y - r * 0.35, r * 0.55, r * 0.9, -0.6 + flap, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.beginPath();
-                ctx.ellipse(x + r * 0.95, y - r * 0.35, r * 0.55, r * 0.9, 0.6 - flap, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1;
 
-                // trail “wind lines”
-                ctx.globalAlpha = 0.22;
-                ctx.strokeStyle = '#cfe8ff';
-                ctx.lineWidth = 2;
-                for (let i = 0;i < 3;i++) {
-                    const yy = y + r * 1.6 + i * 10;
-                    ctx.beginPath();
-                    ctx.moveTo(x - 10, yy);
-                    ctx.lineTo(x - 2, yy + 14);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(x + 10, yy);
-                    ctx.lineTo(x + 2, yy + 14);
-                    ctx.stroke();
-                }
+                ctx.beginPath();
+                ctx.ellipse(
+                    x - r * 0.9,
+                    y - r * 0.25,
+                    r * 0.55,
+                    r * 0.95,
+                    -0.6 + flap,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.ellipse(
+                    x + r * 0.9,
+                    y - r * 0.25,
+                    r * 0.55,
+                    r * 0.95,
+                    0.6 - flap,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+
                 ctx.globalAlpha = 1;
             }
 
