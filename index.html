@@ -143,7 +143,7 @@
     <canvas id="c"></canvas>
 
     <div class="hud">
-        <div style="opacity:.75;margin-top:6px"><span id="dbg">0</span></div>
+        <div style="opacity:.75;margin-top:6px"><span id="dbg"></span></div>
         <div>Score: <b id="score">0</b></div>
         <div>Best: <span id="best">0</span></div>
         <div style="opacity:.8;margin-top:6px">Fly forward • Flowers 🌸 +1 • Avoid hornets 🐝❌</div>
@@ -199,7 +199,7 @@
             const tiltBtn = document.getElementById('tiltBtn');
             const muteBtn = document.getElementById('muteBtn');
             const dbgEl = document.getElementById('dbg');
-            dbgEl.textContent += String(`Version: 1`);
+            dbgEl.textContent += `Version: 1`;
 
             const BEST_KEY = "bee_runner_best_v1";E
             let best = Number(localStorage.getItem(BEST_KEY) || 0);
