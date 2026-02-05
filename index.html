@@ -199,7 +199,7 @@
             const tiltBtn = document.getElementById('tiltBtn');
             const muteBtn = document.getElementById('muteBtn');
             const dbgEl = document.getElementById('dbg');
-            dbgEl.textContent += `Version: 4`;
+            dbgEl.textContent += `Version: 5`;
 
             const BEST_KEY = "bee_runner_best_v1";
             let best = Number(localStorage.getItem(BEST_KEY) || 0);
@@ -297,19 +297,22 @@
             }, { passive: false });
 
             // Primary: DeviceOrientation (gamma left/right)
+            // Primary: DeviceOrientation (gamma left/right)
             let lastGamma = 0;
+            let tiltSign = 1; // set to -1 if you want inverted
+
             addEventListener('deviceorientation', (e) => {
                 if (!tiltEnabled) return;
                 if (typeof e.gamma !== 'number') return;
 
                 lastGamma = e.gamma;
-
                 if (neutralGamma === null) return;
 
-                const g = (e.gamma - neutralGamma) * -1;
+                const raw = (e.gamma - neutralGamma) * tiltSign; // <-- only place to invert
                 const dead = 3;
-                const v = Math.abs(g) < dead ? 0 : g;
-                tiltX = clamp(v / 25, -1, 1) * -1;
+                const g = Math.abs(raw) < dead ? 0 : raw;
+
+                tiltX = clamp(g / 25, -1, 1);
             }, { passive: true });
 
             // Fallback: DeviceMotion (acceleration incl gravity)
@@ -318,14 +321,13 @@
                 const a = e.accelerationIncludingGravity;
                 if (!a) return;
 
-                // In portrait, x roughly corresponds to left/right tilt on many devices
                 const ax = (typeof a.x === 'number') ? a.x : 0;
 
                 const dead = 0.4;
-                const v = Math.abs(ax) < dead ? 0 : ax;
+                const raw = ax * tiltSign;
+                const v = Math.abs(raw) < dead ? 0 : raw;
 
-                // sensitivity: adjust 3.5..6 depending on feel
-                tiltX = Math.max(-1, Math.min(1, v / 4.5));
+                tiltX = clamp(v / 4.5, -1, 1);
             }, { passive: true });
             dbgEl.textContent += String(`Tilt X: ${tiltX}`);
 
