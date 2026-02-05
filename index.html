@@ -306,7 +306,7 @@
 
                 if (neutralGamma === null) return;
 
-                const g = (e.gamma - neutralGamma) * tiltSign;
+                const g = (e.gamma - neutralGamma) * -1;
                 const dead = 3;
                 const v = Math.abs(g) < dead ? 0 : g;
                 tiltX = clamp(v / 25, -1, 1);
