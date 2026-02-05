@@ -296,13 +296,19 @@
             }, { passive: false });
 
             // Primary: DeviceOrientation (gamma left/right)
+            let lastGamma = 0;
             addEventListener('deviceorientation', (e) => {
                 if (!tiltEnabled) return;
-                const g = (typeof e.gamma === 'number') ? e.gamma : 0;
-                // deadzone + normalize
+                if (typeof e.gamma !== 'number') return;
+
+                lastGamma = e.gamma;
+
+                if (neutralGamma === null) return;
+
+                const g = (e.gamma - neutralGamma) * tiltSign;
                 const dead = 3;
                 const v = Math.abs(g) < dead ? 0 : g;
-                tiltX = Math.max(-1, Math.min(1, v / 25));
+                tiltX = clamp(v / 25, -1, 1);
             }, { passive: true });
 
             // Fallback: DeviceMotion (acceleration incl gravity)
@@ -632,4 +638,5 @@
         })();
     </script>
 </body>
+
 </html>
