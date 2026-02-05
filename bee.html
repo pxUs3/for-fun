@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Bee Runner (Portrait)</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #071026;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .hud {
+            position: fixed;
+            left: 12px;
+            top: 10px;
+            color: #eaf0ff;
+            font: 14px/1.2 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, .5);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .hud b {
+            font-size: 18px
+        }
+
+        .topBtns {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            display: flex;
+            gap: 8px;
+            z-index: 5;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .chip {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .12);
+            color: #eaf0ff;
+            font: 14px system-ui, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        .controls {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            gap: 12px;
+            padding: 14px;
+            z-index: 5;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .btn {
+            flex: 1;
+            height: 78px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .14);
+            color: #eaf0ff;
+            font: 600 20px system-ui, Segoe UI, Roboto, Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active {
+            background: rgba(255, 255, 255, .14);
+        }
+
+        .center {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 22px;
+            z-index: 10;
+            background: radial-gradient(circle at 50% 25%, rgba(255, 214, 0, .14), transparent 55%);
+            color: #eaf0ff;
+            font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif;
+            text-align: center;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .card {
+            max-width: 520px;
+            background: rgba(255, 255, 255, .06);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 18px;
+            padding: 18px 18px 14px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, .35);
+        }
+
+        .card h1 {
+            margin: 0 0 8px;
+            font-size: 22px
+        }
+
+        .card p {
+            margin: 8px 0;
+            opacity: .9
+        }
+
+        .hint {
+            opacity: .75;
+            font-size: 13px
+        }
+
+        .start {
+            margin-top: 12px;
+            display: inline-block;
+            padding: 10px 14px;
+            border-radius: 14px;
+            background: rgba(255, 214, 0, .18);
+            border: 1px solid rgba(255, 214, 0, .35);
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+
+    <div class="hud">
+        <div style="opacity:.75;margin-top:6px">tilt γ: <span id="dbg">0</span></div>
+        <div>Score: <b id="score">0</b></div>
+        <div>Best: <span id="best">0</span></div>
+        <div style="opacity:.8;margin-top:6px">Fly forward • Flowers 🌸 +1 • Avoid hornets 🐝❌</div>
+    </div>
+
+    <div class="topBtns">
+        <div class="chip"
+            id="tiltBtn">🎛️ Tilt: OFF</div>
+        <div class="chip"
+            id="muteBtn">🔊</div>
+    </div>
+
+    <div class="controls">
+        <div class="btn"
+            id="leftBtn">◀︎</div>
+        <div class="btn"
+            id="rightBtn">▶︎</div>
+    </div>
+
+    <div class="center"
+        id="overlay">
+        <div class="card">
+            <h1>🐝 Bee Runner</h1>
+            <p>Portrait endless flight. Hold <b>◀︎ / ▶︎</b> or tilt your phone to steer.</p>
+            <p class="hint">Tip: tap “Tilt: OFF” to enable tilt (may ask permission on iPhone).</p>
+            <div class="start">Tap to start</div>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            // ---------- Canvas ----------
+            const canvas = document.getElementById('c');
+            const ctx = canvas.getContext('2d');
+            let W = 0, H = 0, DPR = 1;
+            function resize() {
+                DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+                W = Math.floor(innerWidth);
+                H = Math.floor(innerHeight);
+                canvas.width = Math.floor(W * DPR);
+                canvas.height = Math.floor(H * DPR);
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+            }
+            addEventListener('resize', resize, { passive: true });
+            resize();
+
+            // ---------- UI ----------
+            const overlay = document.getElementById('overlay');
+            const scoreEl = document.getElementById('score');
+            const bestEl = document.getElementById('best');
+            const leftBtn = document.getElementById('leftBtn');
+            const rightBtn = document.getElementById('rightBtn');
+            const tiltBtn = document.getElementById('tiltBtn');
+            const muteBtn = document.getElementById('muteBtn');
+            const dbgEl = document.getElementById('dbg');
+
+            const BEST_KEY = "bee_runner_best_v1";
+            let best = Number(localStorage.getItem(BEST_KEY) || 0);
+            bestEl.textContent = best;
+
+            // ---------- Helpers ----------
+            const rnd = (a, b) => a + Math.random() * (b - a);
+            const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+            const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
+
+            // ---------- Sound (tiny beeps) ----------
+            let audioCtx = null;
+            let muted = false;
+            function beep(freq = 660, dur = 0.05, type = 'sine', vol = 0.06) {
+                if (muted) return;
+                try {
+                    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const t0 = audioCtx.currentTime;
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.type = type;
+                    o.frequency.setValueAtTime(freq, t0);
+                    g.gain.setValueAtTime(0, t0);
+                    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+                    g.gain.linearRampToValueAtTime(0, t0 + dur);
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.start(t0); o.stop(t0 + dur + 0.02);
+                } catch (e) { }
+            }
+            muteBtn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                muted = !muted;
+                muteBtn.textContent = muted ? "🔇" : "🔊";
+                if (!muted) beep(880, 0.04, 'triangle', 0.05);
+            }, { passive: false });
+
+            // ---------- Control state ----------
+            let holdLeft = false, holdRight = false;
+
+            function bindHold(el, onDown, onUp) {
+                el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); onDown(); }, { passive: false });
+                el.addEventListener('pointerup', (e) => { e.preventDefault(); onUp(); }, { passive: false });
+                el.addEventListener('pointercancel', (e) => { e.preventDefault(); onUp(); }, { passive: false });
+                el.addEventListener('pointerleave', (e) => { /* ignore */ }, { passive: true });
+            }
+            bindHold(leftBtn, () => holdLeft = true, () => holdLeft = false);
+            bindHold(rightBtn, () => holdRight = true, () => holdRight = false);
+
+            // Keyboard for desktop
+            addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') holdLeft = true;
+                if (e.key === 'ArrowRight' || e.key === 'd') holdRight = true;
+            });
+            addEventListener('keyup', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') holdLeft = false;
+                if (e.key === 'ArrowRight' || e.key === 'd') holdRight = false;
+            });
+
+            // Tilt control
+            let tiltEnabled = false;
+            let tiltX = 0;
+
+            function setTiltEnabled(v) {
+                tiltEnabled = v;
+                tiltBtn.textContent = tiltEnabled ? "🎛️ Tilt: ON" : "🎛️ Tilt: OFF";
+            }
+
+            async function requestMotionPermissionIfNeeded() {
+                // iOS 13+ needs permission for both orientation and motion
+                const need = (ev) => ev && typeof ev.requestPermission === "function";
+
+                if (need(window.DeviceOrientationEvent)) {
+                    const r = await window.DeviceOrientationEvent.requestPermission().catch(() => "denied");
+                    if (r !== "granted") return false;
+                }
+                if (need(window.DeviceMotionEvent)) {
+                    const r = await window.DeviceMotionEvent.requestPermission().catch(() => "denied");
+                    if (r !== "granted") return false;
+                }
+                return true;
+            }
+
+            tiltBtn.addEventListener('pointerdown', async (e) => {
+                e.preventDefault();
+                if (!tiltEnabled) {
+                    const ok = await requestMotionPermissionIfNeeded();
+                    if (!ok) {
+                        setTiltEnabled(false);
+                        return;
+                    }
+                    setTiltEnabled(true);
+                } else {
+                    setTiltEnabled(false);
+                }
+            }, { passive: false });
+
+            // Primary: DeviceOrientation (gamma left/right)
+            addEventListener('deviceorientation', (e) => {
+                if (!tiltEnabled) return;
+                const g = (typeof e.gamma === 'number') ? e.gamma : 0;
+                // deadzone + normalize
+                const dead = 3;
+                const v = Math.abs(g) < dead ? 0 : g;
+                tiltX = Math.max(-1, Math.min(1, v / 25));
+            }, { passive: true });
+
+            // Fallback: DeviceMotion (acceleration incl gravity)
+            addEventListener('devicemotion', (e) => {
+                if (!tiltEnabled) return;
+                const a = e.accelerationIncludingGravity;
+                if (!a) return;
+
+                // In portrait, x roughly corresponds to left/right tilt on many devices
+                const ax = (typeof a.x === 'number') ? a.x : 0;
+
+                const dead = 0.4;
+                const v = Math.abs(ax) < dead ? 0 : ax;
+
+                // sensitivity: adjust 3.5..6 depending on feel
+                tiltX = Math.max(-1, Math.min(1, v / 4.5));
+            }, { passive: true });
+            dbgEl.textContent = String(`Tilt X: ${tiltX}`);
+
+            // ---------- Game state ----------
+            let running = false;
+            let t = 0;
+            let score = 0;
+            let speed = 260;     // world scroll speed (px/s)
+            let difficulty = 0;  // increases over time
+
+            const bee = {
+                x: 0, y: 0,
+                r: 18,
+                vx: 0,
+            };
+
+            const flowers = [];
+            const hornets = [];
+            const pollen = []; // background particles
+
+            // Spawn in world coordinates: y increases downward; we move items down screen by adding speed*dt.
+            function reset() {
+                t = 0; score = 0; difficulty = 0;
+                speed = 260;
+                bee.x = W * 0.5; bee.y = H * 0.72; bee.vx = 0;
+                flowers.length = 0; hornets.length = 0; pollen.length = 0;
+                scoreEl.textContent = "0";
+                // seed pollen
+                for (let i = 0;i < 80;i++) {
+                    pollen.push({ x: rnd(0, W), y: rnd(0, H), s: rnd(0.5, 2.0) });
+                }
+            }
+
+            function startGame() {
+                overlay.style.display = 'none';
+                running = true;
+                reset();
+                // initial spawns
+                for (let i = 0;i < 4;i++) spawnFlower(true);
+                for (let i = 0;i < 1;i++) spawnHornet(true);
+                beep(660, 0.05, 'sine', 0.06);
+            }
+
+            function endGame() {
+                running = false;
+                overlay.style.display = 'flex';
+                best = Math.max(best, score);
+                localStorage.setItem(BEST_KEY, String(best));
+                bestEl.textContent = best;
+                beep(180, 0.10, 'sawtooth', 0.05);
+                beep(120, 0.12, 'sawtooth', 0.05);
+            }
+
+            overlay.addEventListener('pointerdown', (e) => { e.preventDefault(); startGame(); }, { passive: false });
+            canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!running) startGame(); }, { passive: false });
+
+            function spawnFlower(initial = false) {
+                flowers.push({
+                    x: rnd(30, W - 30),
+                    y: initial ? rnd(-H, 0) : -40,
+                    r: 14,
+                    rot: rnd(0, Math.PI * 2),
+                    spin: rnd(-2, 2),
+                });
+            }
+            function spawnHornet(initial = false) {
+                hornets.push({
+                    x: rnd(30, W - 30),
+                    y: initial ? rnd(-H * 1.2, -80) : -80,
+                    r: 20,
+                    drift: rnd(-60, 60),
+                    phase: rnd(0, Math.PI * 2),
+                    wiggle: rnd(1.2, 2.2),
+                });
+            }
+
+            // ---------- Drawing ----------
+            function drawBackground(dt) {
+                // gradient sky
+                const g = ctx.createLinearGradient(0, 0, 0, H);
+                g.addColorStop(0, '#071026');
+                g.addColorStop(1, '#050a18');
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, W, H);
+
+                // pollen drift (gives sense of forward motion)
+                for (const p of pollen) {
+                    p.y += (speed * 0.25) * dt * p.s;
+                    if (p.y > H + 10) { p.y = -10; p.x = rnd(0, W); p.s = rnd(0.5, 2.0); }
+                    ctx.globalAlpha = 0.18;
+                    ctx.fillStyle = '#ffd600';
+                    ctx.fillRect(p.x, p.y, 2, 2);
+                    ctx.globalAlpha = 1;
+                }
+
+                // subtle vignette
+                ctx.globalAlpha = 0.18;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, W, 24);
+                ctx.fillRect(0, H - 24, W, 24);
+                ctx.globalAlpha = 1;
+            }
+
+            function drawBeeTopDown() {
+                const x = bee.x, y = bee.y, r = bee.r;
+
+                // body (top-down oval)
+                ctx.beginPath();
+                ctx.ellipse(x, y, r * 0.85, r * 1.1, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffd600';
+                ctx.fill();
+
+                // stripes
+                ctx.fillStyle = '#1c1c1c';
+                for (let i = -1;i <= 1;i++) {
+                    ctx.beginPath();
+                    ctx.ellipse(x, y + i * 7, r * 0.75, r * 0.14, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // head (front)
+                ctx.beginPath();
+                ctx.ellipse(x, y - r * 1.0, r * 0.55, r * 0.5, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#1c1c1c';
+                ctx.fill();
+
+                // tiny eyes
+                ctx.fillStyle = '#eaf0ff';
+                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 1.05, r * 0.08, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x + r * 0.2, y - r * 1.05, r * 0.08, 0, Math.PI * 2); ctx.fill();
+
+                // wings (left/right)
+                const flap = Math.sin(t * 18) * 0.25;
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = '#cfe8ff';
+                ctx.beginPath();
+                ctx.ellipse(x - r * 0.95, y - r * 0.35, r * 0.55, r * 0.9, -0.6 + flap, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(x + r * 0.95, y - r * 0.35, r * 0.55, r * 0.9, 0.6 - flap, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // trail “wind lines”
+                ctx.globalAlpha = 0.22;
+                ctx.strokeStyle = '#cfe8ff';
+                ctx.lineWidth = 2;
+                for (let i = 0;i < 3;i++) {
+                    const yy = y + r * 1.6 + i * 10;
+                    ctx.beginPath();
+                    ctx.moveTo(x - 10, yy);
+                    ctx.lineTo(x - 2, yy + 14);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(x + 10, yy);
+                    ctx.lineTo(x + 2, yy + 14);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            function drawFlower(f) {
+                const petals = 6;
+                ctx.save();
+                ctx.translate(f.x, f.y);
+                ctx.rotate(f.rot);
+                for (let i = 0;i < petals;i++) {
+                    ctx.rotate((Math.PI * 2) / petals);
+                    ctx.beginPath();
+                    ctx.ellipse(f.r * 0.9, 0, f.r * 0.6, f.r * 0.28, 0, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,105,180,0.95)';
+                    ctx.fill();
+                }
+                ctx.beginPath();
+                ctx.arc(0, 0, f.r * 0.35, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,214,0,0.95)';
+                ctx.fill();
+                ctx.restore();
+            }
+
+            function drawHornet(h) {
+                // top-down hornet: slightly larger, darker head
+                const x = h.x, y = h.y, r = h.r;
+
+                ctx.beginPath();
+                ctx.ellipse(x, y, r * 0.9, r * 1.15, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffb300';
+                ctx.fill();
+
+                ctx.fillStyle = '#2b1a00';
+                for (let i = -1;i <= 1;i++) {
+                    ctx.beginPath();
+                    ctx.ellipse(x, y + i * 7, r * 0.8, r * 0.14, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.beginPath();
+                ctx.ellipse(x, y - r * 1.05, r * 0.6, r * 0.55, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#2b1a00';
+                ctx.fill();
+
+                // wings
+                const wig = Math.sin(h.phase) * 0.25;
+                ctx.globalAlpha = 0.5;
+                ctx.fillStyle = '#d9f0ff';
+                ctx.beginPath();
+                ctx.ellipse(x - r * 1.05, y - r * 0.35, r * 0.55, r * 0.95, -0.6 + wig, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(x + r * 1.05, y - r * 0.35, r * 0.55, r * 0.95, 0.6 - wig, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            // ---------- Loop ----------
+            let last = performance.now();
+            function step(now) {
+                const dt = Math.min(0.033, (now - last) / 1000);
+                last = now;
+
+                drawBackground(dt);
+
+                if (running && document.visibilityState === 'visible') {
+                    t += dt;
+                    difficulty = Math.min(10, t / 16);
+
+                    // speed ramps slowly
+                    speed = 260 + difficulty * 20;
+
+                    // ---- Input to steering ----
+                    // Button steering
+                    let steer = 0;
+                    if (holdLeft) steer -= 1;
+                    if (holdRight) steer += 1;
+
+                    // Tilt steering (adds)
+                    if (tiltEnabled) steer += tiltX;
+
+                    steer = clamp(steer, -1, 1);
+
+                    // ---- Physics ----
+                    const accel = 1200;   // px/s^2
+                    const drag = 10;     // damping
+                    bee.vx += steer * accel * dt;
+                    bee.vx -= bee.vx * drag * dt;
+                    bee.x += bee.vx * dt;
+
+                    // bounds
+                    bee.x = clamp(bee.x, bee.r + 10, W - bee.r - 10);
+
+                    // ---- Spawning ----
+                    // keep a steady stream of flowers and hornets
+                    const targetFlowers = 4 + Math.floor(difficulty * 0.7);
+                    const targetHornets = 1 + Math.floor(difficulty * 0.5);
+
+                    if (flowers.length < targetFlowers && Math.random() < dt * (1.4 + difficulty * 0.15)) spawnFlower(false);
+                    if (hornets.length < targetHornets && Math.random() < dt * (0.55 + difficulty * 0.12)) spawnHornet(false);
+
+                    // ---- Update entities (world moves down) ----
+                    for (let i = flowers.length - 1;i >= 0;i--) {
+                        const f = flowers[i];
+                        f.y += speed * dt;
+                        f.rot += f.spin * dt;
+
+                        // collect
+                        const rr = (bee.r + f.r) * 0.8;
+                        if (dist2(bee.x, bee.y, f.x, f.y) < rr * rr) {
+                            flowers.splice(i, 1);
+                            score++;
+                            scoreEl.textContent = String(score);
+                            beep(880, 0.04, 'triangle', 0.05);
+                            continue;
+                        }
+                        if (f.y > H + 60) flowers.splice(i, 1);
+                    }
+
+                    for (let i = hornets.length - 1;i >= 0;i--) {
+                        const h = hornets[i];
+                        h.phase += dt * h.wiggle * 6;
+
+                        // wiggle + drift + forward movement
+                        h.y += speed * dt * 1.05;
+                        h.x += (Math.sin(h.phase) * 80 + h.drift) * dt;
+
+                        // mild homing in x
+                        const home = (bee.x - h.x) * (0.35 + difficulty * 0.03);
+                        h.x += home * dt;
+
+                        // bounds for hornet
+                        h.x = clamp(h.x, 20, W - 20);
+
+                        // collision
+                        const rr = (bee.r + h.r) * 0.7;
+                        if (dist2(bee.x, bee.y, h.x, h.y) < rr * rr) {
+                            endGame();
+                            break;
+                        }
+                        if (h.y > H + 80) hornets.splice(i, 1);
+                    }
+                }
+
+                // ---- Draw entities ----
+                for (const f of flowers) drawFlower(f);
+                for (const h of hornets) drawHornet(h);
+                drawBeeTopDown();
+
+                requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+
+        })();
+    </script>
+</body>
+
+</html>
