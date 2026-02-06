@@ -406,205 +406,374 @@
 
             // ---------- Drawing ----------
             function drawBackground(dt) {
-                // gradient sky
+                // --- base grass gradient (top-down) ---
                 const g = ctx.createLinearGradient(0, 0, 0, H);
-                g.addColorStop(0, '#071026');
-                g.addColorStop(1, '#050a18');
+                g.addColorStop(0, "#2f8f3b");
+                g.addColorStop(1, "#1f6f30");
                 ctx.fillStyle = g;
                 ctx.fillRect(0, 0, W, H);
 
-                // pollen drift (gives sense of forward motion)
+                // --- a reusable "scroll" helper for repeating y ---
+                const wrapY = (yy, span, top = 0) => ((yy - top) % span + span) % span + top;
+
+                // --- mottled grass cells (gives texture without heavy per-pixel noise) ---
+                // We use deterministic pseudo positions so it doesn't flicker.
+                ctx.save();
+                ctx.globalAlpha = 0.18;
+
+                const cellSpan = 60;               // how often pattern repeats vertically
+                const scroll = (t * speed * 0.22); // background scroll amount
+
+                for (let i = 0;i < 220;i++) {
+                    const x = (i * 67) % W;
+                    const base = (i * 97) % (H + cellSpan);
+                    const y = wrapY(base + scroll, H + cellSpan, -cellSpan);
+
+                    const s = 18 + (i % 9) * 3;
+                    // alternate slightly different greens
+                    ctx.fillStyle = (i % 3 === 0)
+                        ? "rgba(0,0,0,0.25)"       // shadow clump
+                        : (i % 3 === 1)
+                            ? "rgba(255,255,255,0.10)" // sunlit clump
+                            : "rgba(0,0,0,0.15)";
+
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, s * 1.3, s, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // --- mowing / direction streaks (parallax lines) ---
+                ctx.save();
+                const streakScroll = (t * speed * 0.35) % 40;
+                ctx.globalAlpha = 0.10;
+                ctx.lineWidth = 2;
+
+                for (let x = -40;x < W + 40;x += 46) {
+                    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+                    ctx.beginPath();
+                    ctx.moveTo(x + 8, -80 + streakScroll);
+                    ctx.lineTo(x - 18, H + 80 + streakScroll);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = "rgba(0,0,0,0.22)";
+                    ctx.beginPath();
+                    ctx.moveTo(x + 20, -80 + streakScroll);
+                    ctx.lineTo(x - 6, H + 80 + streakScroll);
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                // --- dirt patches / worn paths (rare) ---
+                ctx.save();
+                ctx.globalAlpha = 0.18;
+                const dirtScroll = (t * speed * 0.18);
+                for (let i = 0;i < 14;i++) {
+                    const x = (i * 173 + 90) % W;
+                    const base = (i * 211) % (H + 240);
+                    const y = wrapY(base + dirtScroll, H + 240, -240);
+
+                    const rx = 30 + (i % 5) * 10;
+                    const ry = 18 + (i % 4) * 8;
+
+                    const dg = ctx.createRadialGradient(x, y, 2, x, y, rx * 1.2);
+                    dg.addColorStop(0, "rgba(120,85,40,0.55)");
+                    dg.addColorStop(1, "rgba(120,85,40,0)");
+                    ctx.fillStyle = dg;
+
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, rx, ry, (i % 3) * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // --- tiny flowers as specks (top-down vibe) ---
+                ctx.save();
+                ctx.globalAlpha = 0.30;
+                const flowerScroll = (t * speed * 0.55);
+                for (let i = 0;i < 55;i++) {
+                    const x = (i * 79 + 33) % W;
+                    const base = (i * 101) % (H + 120);
+                    const y = wrapY(base + flowerScroll, H + 120, -120);
+
+                    const s = 2 + (i % 3); // 2..4
+                    ctx.fillStyle = (i % 4 === 0) ? "rgba(255,105,180,0.95)"
+                        : (i % 4 === 1) ? "rgba(255,214,0,0.95)"
+                            : (i % 4 === 2) ? "rgba(180,120,255,0.95)"
+                                : "rgba(255,255,255,0.90)";
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, s, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // --- pollen drift (still nice, but subtle) ---
                 for (const p of pollen) {
                     p.y += (speed * 0.25) * dt * p.s;
+                    p.x += Math.sin(t * 0.8 + p.y * 0.01) * dt * 10 * p.s;
+
                     if (p.y > H + 10) { p.y = -10; p.x = rnd(0, W); p.s = rnd(0.5, 2.0); }
-                    ctx.globalAlpha = 0.18;
-                    ctx.fillStyle = '#ffd600';
+                    if (p.x < -20) p.x = W + 20;
+                    if (p.x > W + 20) p.x = -20;
+
+                    ctx.globalAlpha = 0.14;
+                    ctx.fillStyle = "rgba(255,255,255,0.9)";
                     ctx.fillRect(p.x, p.y, 2, 2);
                     ctx.globalAlpha = 1;
                 }
 
-                // subtle vignette
-                ctx.globalAlpha = 0.18;
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, W, 24);
-                ctx.fillRect(0, H - 24, W, 24);
-                ctx.globalAlpha = 1;
+                // --- vignette (keeps focus on bee) ---
+                ctx.save();
+                const v = ctx.createRadialGradient(W * 0.5, H * 0.55, H * 0.15, W * 0.5, H * 0.55, H * 0.95);
+                v.addColorStop(0, "rgba(0,0,0,0)");
+                v.addColorStop(1, "rgba(0,0,0,0.22)");
+                ctx.fillStyle = v;
+                ctx.fillRect(0, 0, W, H);
+                ctx.restore();
             }
 
             function drawBeeTopDown() {
                 const x = bee.x, y = bee.y, r = bee.r;
 
-                // Helpers
-                const ellipse = (cx, cy, rx, ry, rot = 0) => {
+                const ellipsePath = (cx, cy, rx, ry, rot = 0) => {
                     ctx.beginPath();
                     ctx.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
                 };
 
-                // ---------------- Legs (under body) ----------------
+                // ---------- Soft ground shadow (adds depth) ----------
                 ctx.save();
-                ctx.strokeStyle = '#2a1a00';
-                ctx.lineWidth = Math.max(1.5, r * 0.06);
-                ctx.lineCap = 'round';
+                ctx.globalAlpha = 0.18;
+                ctx.fillStyle = "#000";
+                ellipsePath(x, y + r * 1.05, r * 0.9, r * 0.35);
+                ctx.fill();
+                ctx.restore();
 
-                const thoraxY = y - r * 0.12;
-                const legSpread = r * 0.55;
+                // ---------- Legs (under body) ----------
+                ctx.save();
+                ctx.strokeStyle = "#2a1a00";
+                ctx.lineCap = "round";
+                ctx.lineWidth = Math.max(1.4, r * 0.06);
+
+                const thoraxY = y - r * 0.08;
+                const legOut = r * 0.62;
+                const legBack = r * 0.22;
 
                 for (const side of [-1, 1]) {
                     for (let i = -1;i <= 1;i++) {
                         const ly = thoraxY + i * r * 0.34;
-                        const lx = x + side * r * 0.58;
+                        const lx = x + side * r * 0.50;
+
+                        // 2-segment leg
+                        const kx = lx + side * (legOut * 0.65);
+                        const ky = ly + r * (0.20 + 0.07 * i);
+                        const fx = kx + side * (legOut * 0.40);
+                        const fy = ky + r * (0.18 + 0.06 * i) + legBack * 0.10;
 
                         ctx.beginPath();
                         ctx.moveTo(lx, ly);
-                        ctx.lineTo(lx + side * legSpread, ly + r * (0.25 + 0.08 * i));
+                        ctx.quadraticCurveTo(kx, ky, fx, fy);
                         ctx.stroke();
 
-                        // tiny "foot"
+                        // foot tip
+                        ctx.lineWidth = Math.max(1.1, r * 0.045);
                         ctx.beginPath();
-                        ctx.moveTo(lx + side * legSpread, ly + r * (0.25 + 0.08 * i));
-                        ctx.lineTo(lx + side * (legSpread + r * 0.12), ly + r * (0.28 + 0.08 * i));
+                        ctx.moveTo(fx, fy);
+                        ctx.lineTo(fx + side * r * 0.16, fy + r * 0.04);
                         ctx.stroke();
+
+                        ctx.lineWidth = Math.max(1.4, r * 0.06);
                     }
                 }
                 ctx.restore();
 
-                // ---------------- Wings (behind thorax, above legs) ----------------
+                // ---------- Wings (behind body; nicer material + motion) ----------
                 ctx.save();
-                const flap = Math.sin(t * 18) * 0.25;
+                const flap = Math.sin(t * 18) * 0.22;
+                const flap2 = Math.sin(t * 18 + 1.7) * 0.16;
 
-                // Wing gradient
-                const wg = ctx.createRadialGradient(x, y - r * 0.35, r * 0.1, x, y - r * 0.35, r * 1.6);
-                wg.addColorStop(0, 'rgba(240, 250, 255, 0.85)');
-                wg.addColorStop(1, 'rgba(170, 215, 255, 0.20)');
+                // Wing "glass" gradient
+                const wg = ctx.createRadialGradient(x, y - r * 0.45, r * 0.15, x, y - r * 0.40, r * 1.75);
+                wg.addColorStop(0, "rgba(255,255,255,0.90)");
+                wg.addColorStop(0.35, "rgba(210,240,255,0.55)");
+                wg.addColorStop(1, "rgba(140,200,255,0.18)");
 
-                ctx.globalAlpha = 0.9;
+                // Slight blur by drawing 2 layers
+                ctx.globalAlpha = 0.75;
                 ctx.fillStyle = wg;
 
-                // Left wing
-                ellipse(x - r * 0.88, y - r * 0.28, r * 0.58, r * 1.0, -0.65 + flap);
+                // left wing
+                ellipsePath(x - r * 0.92, y - r * 0.30, r * 0.62, r * 1.08, -0.68 + flap);
+                ctx.fill();
+                // right wing
+                ellipsePath(x + r * 0.92, y - r * 0.30, r * 0.62, r * 1.08, 0.68 - flap);
                 ctx.fill();
 
-                // Right wing
-                ellipse(x + r * 0.88, y - r * 0.28, r * 0.58, r * 1.0, 0.65 - flap);
-                ctx.fill();
-
-                // Wing veins
+                // second faint layer for "motion"
                 ctx.globalAlpha = 0.35;
-                ctx.strokeStyle = 'rgba(120,160,200,0.8)';
-                ctx.lineWidth = Math.max(1, r * 0.03);
+                ellipsePath(x - r * 0.92, y - r * 0.30, r * 0.62, r * 1.08, -0.68 + flap2);
+                ctx.fill();
+                ellipsePath(x + r * 0.92, y - r * 0.30, r * 0.62, r * 1.08, 0.68 - flap2);
+                ctx.fill();
 
-                const vein = (sx, sy, ex, ey) => {
+                // Veins
+                ctx.globalAlpha = 0.28;
+                ctx.strokeStyle = "rgba(90,140,180,0.9)";
+                ctx.lineWidth = Math.max(1, r * 0.03);
+                const vein = (sx, sy, ex, ey, lift) => {
                     ctx.beginPath();
                     ctx.moveTo(sx, sy);
-                    ctx.quadraticCurveTo((sx + ex) / 2, sy - r * 0.35, ex, ey);
+                    ctx.quadraticCurveTo((sx + ex) / 2, sy - lift, ex, ey);
                     ctx.stroke();
                 };
-
-                vein(x - r * 0.65, y - r * 0.65, x - r * 1.15, y + r * 0.15);
-                vein(x + r * 0.65, y - r * 0.65, x + r * 1.15, y + r * 0.15);
+                vein(x - r * 0.60, y - r * 0.70, x - r * 1.16, y + r * 0.10, r * 0.48);
+                vein(x + r * 0.60, y - r * 0.70, x + r * 1.16, y + r * 0.10, r * 0.48);
 
                 ctx.restore();
 
-                // ---------------- Abdomen ----------------
+                // ---------- Abdomen (better shading + stripes that wrap) ----------
                 ctx.save();
 
-                // Base fill gradient
-                const ag = ctx.createLinearGradient(x, y - r * 0.2, x, y + r * 1.9);
-                ag.addColorStop(0, '#ffe66a');
-                ag.addColorStop(1, '#ffb800');
+                // base body gradient
+                const ag = ctx.createLinearGradient(x, y - r * 0.10, x, y + r * 1.85);
+                ag.addColorStop(0, "#fff1a8");
+                ag.addColorStop(0.45, "#ffd34f");
+                ag.addColorStop(1, "#ff9f1a");
 
-                ellipse(x, y + r * 0.48, r * 0.88, r * 1.15);
+                ellipsePath(x, y + r * 0.52, r * 0.92, r * 1.18);
                 ctx.fillStyle = ag;
                 ctx.fill();
 
-                // Soft highlight
-                ctx.globalAlpha = 0.18;
-                ellipse(x - r * 0.18, y + r * 0.2, r * 0.55, r * 0.95);
-                ctx.fillStyle = '#ffffff';
+                // edge shade (vignette on body)
+                ctx.globalAlpha = 0.22;
+                const edge = ctx.createRadialGradient(x, y + r * 0.60, r * 0.2, x, y + r * 0.65, r * 1.35);
+                edge.addColorStop(0, "rgba(0,0,0,0)");
+                edge.addColorStop(1, "rgba(0,0,0,0.55)");
+                ctx.fillStyle = edge;
+                ellipsePath(x, y + r * 0.52, r * 0.92, r * 1.18);
                 ctx.fill();
                 ctx.globalAlpha = 1;
 
-                // Stripes (curvier + tapered)
-                ctx.fillStyle = '#1c1c1c';
+                // highlight strip
+                ctx.globalAlpha = 0.14;
+                ctx.fillStyle = "#fff";
+                ellipsePath(x - r * 0.22, y + r * 0.18, r * 0.55, r * 0.95);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // stripes that "wrap" (thicker in middle, thinner near end)
+                ctx.fillStyle = "#1c1c1c";
                 for (let i = -1;i <= 2;i++) {
-                    const yy = y + r * 0.25 + i * r * 0.38;
-                    const rx = r * (0.78 - i * 0.08);
+                    const yy = y + r * 0.27 + i * r * 0.39;
+                    const taper = 1 - (i + 1) * 0.08; // slight taper
+                    const rx = r * (0.78 * taper);
                     const ry = r * 0.16;
-                    ellipse(x, yy, rx, ry);
+
+                    // make stripes curved by slight tilt + inner cut highlight
+                    ellipsePath(x, yy, rx, ry, 0.06);
                     ctx.fill();
+
+                    // subtle inner shine (gives wrap)
+                    ctx.globalAlpha = 0.08;
+                    ctx.fillStyle = "#fff";
+                    ellipsePath(x - r * 0.10, yy - r * 0.02, rx * 0.65, ry * 0.55, 0.06);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = "#1c1c1c";
                 }
 
-                // Stinger
-                ctx.fillStyle = '#1c1c1c';
+                // stinger
+                ctx.fillStyle = "#121212";
                 ctx.beginPath();
-                ctx.moveTo(x, y + r * 1.62);
-                ctx.lineTo(x - r * 0.16, y + r * 1.35);
-                ctx.lineTo(x + r * 0.16, y + r * 1.35);
+                ctx.moveTo(x, y + r * 1.66);
+                ctx.lineTo(x - r * 0.17, y + r * 1.34);
+                ctx.lineTo(x + r * 0.17, y + r * 1.34);
                 ctx.closePath();
                 ctx.fill();
 
                 ctx.restore();
 
-                // ---------------- Thorax ----------------
+                // ---------- Thorax (fuzzy + warmer) ----------
                 ctx.save();
+                const tg = ctx.createRadialGradient(x - r * 0.18, y - r * 0.25, r * 0.1, x, y - r * 0.05, r * 1.05);
+                tg.addColorStop(0, "#ffe07a");
+                tg.addColorStop(1, "#d79000");
 
-                const tg = ctx.createRadialGradient(x - r * 0.15, y - r * 0.25, r * 0.1, x, y - r * 0.1, r * 1.1);
-                tg.addColorStop(0, '#ffd24d');
-                tg.addColorStop(1, '#e0a300');
-
-                ellipse(x, y - r * 0.08, r * 0.75, r * 0.65);
+                ellipsePath(x, y - r * 0.07, r * 0.78, r * 0.70);
                 ctx.fillStyle = tg;
                 ctx.fill();
 
-                // fuzzy outline
-                ctx.strokeStyle = 'rgba(90,60,0,0.35)';
-                ctx.lineWidth = Math.max(1, r * 0.05);
-                ctx.stroke();
+                // fuzzy rim: draw a few jittered strokes
+                ctx.strokeStyle = "rgba(80,55,0,0.30)";
+                ctx.lineWidth = Math.max(1, r * 0.06);
+                for (let k = 0;k < 3;k++) {
+                    const jx = (Math.random() - 0.5) * r * 0.05;
+                    const jy = (Math.random() - 0.5) * r * 0.05;
+                    ellipsePath(x + jx, y - r * 0.07 + jy, r * 0.78, r * 0.70);
+                    ctx.stroke();
+                }
+
+                // small thorax shine
+                ctx.globalAlpha = 0.10;
+                ctx.fillStyle = "#fff";
+                ellipsePath(x - r * 0.20, y - r * 0.25, r * 0.42, r * 0.35);
+                ctx.fill();
+                ctx.globalAlpha = 1;
 
                 ctx.restore();
 
-                // ---------------- Head ----------------
+                // ---------- Head (eyes + antenna + tiny blush) ----------
                 ctx.save();
+                const hg = ctx.createRadialGradient(x - r * 0.18, y - r * 1.05, r * 0.05, x, y - r * 1.0, r * 0.95);
+                hg.addColorStop(0, "#4a4a4a");
+                hg.addColorStop(1, "#0d0d0d");
 
-                const hg = ctx.createRadialGradient(x - r * 0.15, y - r * 1.05, r * 0.05, x, y - r * 1.0, r * 0.9);
-                hg.addColorStop(0, '#3a3a3a');
-                hg.addColorStop(1, '#0f0f0f');
-
-                ellipse(x, y - r * 1.02, r * 0.58, r * 0.54);
+                ellipsePath(x, y - r * 1.02, r * 0.62, r * 0.58);
                 ctx.fillStyle = hg;
                 ctx.fill();
 
-                // Antennae
-                ctx.strokeStyle = '#2a1a00';
+                // antennae
+                ctx.strokeStyle = "#2a1a00";
                 ctx.lineWidth = Math.max(1.2, r * 0.05);
-                ctx.lineCap = 'round';
+                ctx.lineCap = "round";
 
-                const ax = r * 0.18, ay = r * 0.35;
+                const ax = r * 0.20;
                 ctx.beginPath();
                 ctx.moveTo(x - ax, y - r * 1.35);
-                ctx.quadraticCurveTo(x - r * 0.45, y - r * 1.65, x - r * 0.22, y - r * 1.85);
+                ctx.quadraticCurveTo(x - r * 0.50, y - r * 1.68, x - r * 0.22, y - r * 1.88);
                 ctx.stroke();
 
                 ctx.beginPath();
                 ctx.moveTo(x + ax, y - r * 1.35);
-                ctx.quadraticCurveTo(x + r * 0.45, y - r * 1.65, x + r * 0.22, y - r * 1.85);
+                ctx.quadraticCurveTo(x + r * 0.50, y - r * 1.68, x + r * 0.22, y - r * 1.88);
                 ctx.stroke();
 
-                // Eyes (bigger + shine)
-                const ex = r * 0.23, ey = y - r * 1.06;
-                ctx.fillStyle = '#eaf0ff';
-                ctx.beginPath(); ctx.arc(x - ex, ey, r * 0.12, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.arc(x + ex, ey, r * 0.12, 0, Math.PI * 2); ctx.fill();
+                // eyes (bigger with dark pupil + shine)
+                const ex = r * 0.25, ey = y - r * 1.07;
+                ctx.fillStyle = "#eaf0ff";
+                ctx.beginPath(); ctx.arc(x - ex, ey, r * 0.14, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x + ex, ey, r * 0.14, 0, Math.PI * 2); ctx.fill();
 
-                ctx.fillStyle = 'rgba(255,255,255,0.9)';
-                ctx.beginPath(); ctx.arc(x - ex - r * 0.04, ey - r * 0.05, r * 0.04, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.arc(x + ex - r * 0.04, ey - r * 0.05, r * 0.04, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "rgba(0,0,0,0.35)";
+                ctx.beginPath(); ctx.arc(x - ex + r * 0.03, ey + r * 0.03, r * 0.07, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x + ex + r * 0.03, ey + r * 0.03, r * 0.07, 0, Math.PI * 2); ctx.fill();
 
-                // Tiny smile
-                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                ctx.fillStyle = "rgba(255,255,255,0.95)";
+                ctx.beginPath(); ctx.arc(x - ex - r * 0.05, ey - r * 0.06, r * 0.05, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x + ex - r * 0.05, ey - r * 0.06, r * 0.05, 0, Math.PI * 2); ctx.fill();
+
+                // tiny cheeks
+                ctx.globalAlpha = 0.10;
+                ctx.fillStyle = "#ff7aa2";
+                ctx.beginPath(); ctx.arc(x - r * 0.36, y - r * 0.92, r * 0.09, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x + r * 0.36, y - r * 0.92, r * 0.09, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // smile
+                ctx.strokeStyle = "rgba(255,255,255,0.65)";
                 ctx.lineWidth = Math.max(1, r * 0.035);
                 ctx.beginPath();
-                ctx.arc(x, y - r * 0.92, r * 0.14, 0.15 * Math.PI, 0.85 * Math.PI);
+                ctx.arc(x, y - r * 0.92, r * 0.15, 0.15 * Math.PI, 0.85 * Math.PI);
                 ctx.stroke();
 
                 ctx.restore();
@@ -631,37 +800,186 @@
             }
 
             function drawHornet(h) {
-                // top-down hornet: slightly larger, darker head
                 const x = h.x, y = h.y, r = h.r;
 
+                // "look" direction (mostly toward bee)
+                const dx = bee.x - x;
+                const dy = bee.y - y;
+                const ang = Math.atan2(dy, dx);
+
+                // Near-bee danger factor
+                const d = Math.sqrt(dist2(bee.x, bee.y, x, y));
+                const danger = clamp(1 - d / 260, 0, 1);
+
+                // ---- Threat aura (subtle red glow) ----
+                ctx.save();
+                if (danger > 0) {
+                    const glow = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * (2.6 + danger * 1.8));
+                    glow.addColorStop(0, `rgba(255,40,40,${0.10 + danger * 0.18})`);
+                    glow.addColorStop(1, "rgba(255,40,40,0)");
+                    ctx.fillStyle = glow;
+                    ctx.beginPath();
+                    ctx.arc(x, y, r * (2.8 + danger * 2.0), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // Wing wiggle
+                const wig = Math.sin(h.phase) * (0.25 + danger * 0.15);
+
+                // ---- Wings (behind) with buzz blur ----
+                ctx.save();
+                const wingG = ctx.createRadialGradient(x, y - r * 0.25, r * 0.1, x, y - r * 0.25, r * 1.9);
+                wingG.addColorStop(0, "rgba(240,250,255,0.75)");
+                wingG.addColorStop(1, "rgba(160,210,255,0.10)");
+                ctx.fillStyle = wingG;
+
+                ctx.globalAlpha = 0.6;
                 ctx.beginPath();
-                ctx.ellipse(x, y, r * 0.9, r * 1.15, 0, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffb300';
+                ctx.ellipse(x - r * 1.05, y - r * 0.25, r * 0.60, r * 1.15, -0.7 + wig, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(x + r * 1.05, y - r * 0.25, r * 0.60, r * 1.15, 0.7 - wig, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.fillStyle = '#2b1a00';
-                for (let i = -1;i <= 1;i++) {
+                // motion blur layer
+                ctx.globalAlpha = 0.22;
+                ctx.beginPath();
+                ctx.ellipse(x - r * 1.05, y - r * 0.25, r * 0.60, r * 1.15, -0.7 + wig * 1.7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(x + r * 1.05, y - r * 0.25, r * 0.60, r * 1.15, 0.7 - wig * 1.7, 0, Math.PI * 2);
+                ctx.fill();
+
+                // wing veins
+                ctx.globalAlpha = 0.25;
+                ctx.strokeStyle = "rgba(80,120,160,0.8)";
+                ctx.lineWidth = Math.max(1, r * 0.03);
+                const vein = (sx, sy, ex, ey) => {
                     ctx.beginPath();
-                    ctx.ellipse(x, y + i * 7, r * 0.8, r * 0.14, 0, 0, Math.PI * 2);
+                    ctx.moveTo(sx, sy);
+                    ctx.quadraticCurveTo((sx + ex) / 2, sy - r * 0.40, ex, ey);
+                    ctx.stroke();
+                };
+                vein(x - r * 0.65, y - r * 0.65, x - r * 1.20, y + r * 0.10);
+                vein(x + r * 0.65, y - r * 0.65, x + r * 1.20, y + r * 0.10);
+
+                ctx.restore();
+
+                // ---- Body (darker, more contrast) ----
+                ctx.save();
+                const bodyG = ctx.createLinearGradient(x, y - r * 1.1, x, y + r * 1.3);
+                bodyG.addColorStop(0, "#ffcf3a");
+                bodyG.addColorStop(0.6, "#ff9f00");
+                bodyG.addColorStop(1, "#c86f00");
+
+                ctx.beginPath();
+                ctx.ellipse(x, y, r * 0.95, r * 1.25, 0, 0, Math.PI * 2);
+                ctx.fillStyle = bodyG;
+                ctx.fill();
+
+                // Body edge shadow
+                ctx.globalAlpha = 0.22;
+                const edge = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 1.6);
+                edge.addColorStop(0, "rgba(0,0,0,0)");
+                edge.addColorStop(1, "rgba(0,0,0,0.55)");
+                ctx.fillStyle = edge;
+                ctx.beginPath();
+                ctx.ellipse(x, y, r * 0.95, r * 1.25, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // ---- Stripes (sharper) ----
+                ctx.fillStyle = "#1a0e00";
+                for (let i = -1;i <= 2;i++) {
+                    const yy = y + i * r * 0.34;
+                    ctx.beginPath();
+                    ctx.ellipse(x, yy, r * 0.88, r * 0.13, 0.04, 0, Math.PI * 2);
                     ctx.fill();
                 }
 
+                // ---- Stinger (pointy) ----
+                ctx.fillStyle = "#120a00";
                 ctx.beginPath();
-                ctx.ellipse(x, y - r * 1.05, r * 0.6, r * 0.55, 0, 0, Math.PI * 2);
-                ctx.fillStyle = '#2b1a00';
+                ctx.moveTo(x, y + r * 1.55);
+                ctx.lineTo(x - r * 0.18, y + r * 1.20);
+                ctx.lineTo(x + r * 0.18, y + r * 1.20);
+                ctx.closePath();
                 ctx.fill();
 
-                // wings
-                const wig = Math.sin(h.phase) * 0.25;
-                ctx.globalAlpha = 0.5;
-                ctx.fillStyle = '#d9f0ff';
+                // ---- Legs / spikes (makes it scarier) ----
+                ctx.strokeStyle = "rgba(35,18,0,0.85)";
+                ctx.lineWidth = Math.max(1.2, r * 0.05);
+                ctx.lineCap = "round";
+                for (const side of [-1, 1]) {
+                    for (let i = -1;i <= 1;i++) {
+                        const ly = y - r * 0.10 + i * r * 0.32;
+                        const lx = x + side * r * 0.55;
+                        const kx = lx + side * r * 0.45;
+                        const ky = ly + r * 0.22;
+                        const fx = kx + side * r * 0.28;
+                        const fy = ky + r * 0.10;
+
+                        ctx.beginPath();
+                        ctx.moveTo(lx, ly);
+                        ctx.quadraticCurveTo(kx, ky, fx, fy);
+                        ctx.stroke();
+                    }
+                }
+
+                ctx.restore();
+
+                // ---- Head (dark, angry face) ----
+                ctx.save();
+                const hx = x + Math.cos(ang) * r * 0.10; // small offset toward bee
+                const hy = y - r * 1.05 + Math.sin(ang) * r * 0.06;
+
+                const headG = ctx.createRadialGradient(hx - r * 0.10, hy - r * 0.05, r * 0.1, hx, hy, r * 0.9);
+                headG.addColorStop(0, "#3a2408");
+                headG.addColorStop(1, "#120700");
+
                 ctx.beginPath();
-                ctx.ellipse(x - r * 1.05, y - r * 0.35, r * 0.55, r * 0.95, -0.6 + wig, 0, Math.PI * 2);
+                ctx.ellipse(hx, hy, r * 0.68, r * 0.62, 0, 0, Math.PI * 2);
+                ctx.fillStyle = headG;
                 ctx.fill();
+
+                // Angry eyes + brows
+                const eyeSep = r * 0.26;
+                const eyeY = hy - r * 0.05;
+                const eyeR = r * 0.12 + danger * r * 0.03;
+
+                // brows
+                ctx.strokeStyle = "rgba(255,60,60,0.85)";
+                ctx.lineWidth = Math.max(1.2, r * 0.05);
+                ctx.lineCap = "round";
                 ctx.beginPath();
-                ctx.ellipse(x + r * 1.05, y - r * 0.35, r * 0.55, r * 0.95, 0.6 - wig, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1;
+                ctx.moveTo(hx - eyeSep - r * 0.12, eyeY - r * 0.16);
+                ctx.lineTo(hx - eyeSep + r * 0.12, eyeY - r * 0.22);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(hx + eyeSep - r * 0.12, eyeY - r * 0.22);
+                ctx.lineTo(hx + eyeSep + r * 0.12, eyeY - r * 0.16);
+                ctx.stroke();
+
+                // eyes (glow red)
+                ctx.fillStyle = `rgba(255,60,60,${0.75 + danger * 0.20})`;
+                ctx.beginPath(); ctx.arc(hx - eyeSep, eyeY, eyeR, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(hx + eyeSep, eyeY, eyeR, 0, Math.PI * 2); ctx.fill();
+
+                // pupils
+                ctx.fillStyle = "rgba(0,0,0,0.55)";
+                ctx.beginPath(); ctx.arc(hx - eyeSep + r * 0.03, eyeY + r * 0.02, eyeR * 0.45, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(hx + eyeSep + r * 0.03, eyeY + r * 0.02, eyeR * 0.45, 0, Math.PI * 2); ctx.fill();
+
+                // tiny "mouth" slash
+                ctx.strokeStyle = "rgba(255,220,140,0.35)";
+                ctx.lineWidth = Math.max(1, r * 0.04);
+                ctx.beginPath();
+                ctx.moveTo(hx - r * 0.18, hy + r * 0.22);
+                ctx.lineTo(hx + r * 0.18, hy + r * 0.26);
+                ctx.stroke();
+
+                ctx.restore();
             }
 
             // ---------- Loop ----------
@@ -684,19 +1002,19 @@
                     let steer = 0;
                     if (holdLeft) steer -= 1;
                     if (holdRight) steer += 1;
-
-                    // Tilt steering (adds)
                     if (tiltEnabled) steer += tiltX;
 
-                    steer = clamp(steer, -1, 1);
+                    // prioritize buttons (stronger) but still allow tilt to fine tune
+                    if (holdLeft || holdRight) steer = clamp(steer + tiltX * 0.35, -1, 1);
+                    else steer = clamp(steer, -1, 1);
 
                     // ---- Physics ----
-                    const accel = 1200;   // px/s^2
-                    const drag = 10;     // damping
-                    bee.vx += steer * accel * dt;
-                    bee.vx -= bee.vx * drag * dt;
-                    bee.x += bee.vx * dt;
+                    const maxV = 520;          // px/s
+                    const response = 20;       // bigger = snappier (try 16..30)
 
+                    const targetV = steer * maxV;
+                    bee.vx += (targetV - bee.vx) * (1 - Math.exp(-response * dt));
+                    bee.x += bee.vx * dt;
                     // bounds
                     bee.x = clamp(bee.x, bee.r + 10, W - bee.r - 10);
 
