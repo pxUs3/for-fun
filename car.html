@@ -1,14 +1,706 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
+
 <head>
-    <meta charset='utf-8'>
-    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
-    <title>Page Title</title>
-    <meta name='viewport' content='width=device-width, initial-scale=1'>
-    <link rel='stylesheet' type='text/css' media='screen' href='main.css'>
-    <script src='main.js'></script>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Lane Drifter</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #071026;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .hud {
+            position: fixed;
+            left: 12px;
+            top: 10px;
+            color: #eaf0ff;
+            font: 14px/1.2 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, .55);
+            user-select: none;
+            -webkit-user-select: none;
+            z-index: 5;
+        }
+
+        .hud b {
+            font-size: 18px
+        }
+
+        .topBtns {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            display: flex;
+            gap: 8px;
+            z-index: 6;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .chip {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .12);
+            color: #eaf0ff;
+            font: 14px system-ui, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        .controls {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            gap: 12px;
+            padding: 14px;
+            z-index: 6;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .btn {
+            flex: 1;
+            height: 78px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .14);
+            color: #eaf0ff;
+            font: 700 20px system-ui, Segoe UI, Roboto, Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active {
+            background: rgba(255, 255, 255, .14);
+        }
+
+        .center {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 22px;
+            z-index: 10;
+            background: radial-gradient(circle at 50% 25%, rgba(0, 255, 255, .10), transparent 55%);
+            color: #eaf0ff;
+            font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif;
+            text-align: center;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .card {
+            max-width: 560px;
+            background: rgba(255, 255, 255, .06);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 18px;
+            padding: 18px 18px 14px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, .35);
+        }
+
+        .card h1 {
+            margin: 0 0 8px;
+            font-size: 22px
+        }
+
+        .card p {
+            margin: 8px 0;
+            opacity: .9
+        }
+
+        .hint {
+            opacity: .75;
+            font-size: 13px
+        }
+
+        .start {
+            margin-top: 12px;
+            display: inline-block;
+            padding: 10px 14px;
+            border-radius: 14px;
+            background: rgba(0, 255, 255, .14);
+            border: 1px solid rgba(0, 255, 255, .25);
+        }
+    </style>
 </head>
+
 <body>
-    asdasd
+    <canvas id="c"></canvas>
+
+    <div class="hud">
+        <div>Score: <b id="score">0</b></div>
+        <div>Best: <span id="best">0</span></div>
+        <div style="opacity:.8;margin-top:6px">Twisty road • Drift feel • Avoid traffic</div>
+    </div>
+
+    <div class="topBtns">
+        <div class="chip"
+            id="tiltBtn">🎛️ Tilt: OFF</div>
+        <div class="chip"
+            id="muteBtn">🔊</div>
+    </div>
+
+    <div class="controls">
+        <div class="btn"
+            id="leftBtn">◀︎</div>
+        <div class="btn"
+            id="rightBtn">▶︎</div>
+    </div>
+
+    <div class="center"
+        id="overlay">
+        <div class="card">
+            <h1>🏎️ Lane Drifter</h1>
+            <p>Hold <b>◀︎ / ▶︎</b> to steer. Road curves automatically. Your car has inertia — drift the bends.</p>
+            <p class="hint">Tip: enable Tilt for smoother control (GitHub Pages / HTTPS).</p>
+            <div class="start">Tap to start</div>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            // ---------- Canvas ----------
+            const canvas = document.getElementById('c');
+            const ctx = canvas.getContext('2d');
+            let W = 0, H = 0, DPR = 1;
+            function resize() {
+                DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+                W = Math.floor(innerWidth);
+                H = Math.floor(innerHeight);
+                canvas.width = Math.floor(W * DPR);
+                canvas.height = Math.floor(H * DPR);
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+            }
+            addEventListener('resize', resize, { passive: true });
+            resize();
+
+            // ---------- UI ----------
+            const overlay = document.getElementById('overlay');
+            const scoreEl = document.getElementById('score');
+            const bestEl = document.getElementById('best');
+            const leftBtn = document.getElementById('leftBtn');
+            const rightBtn = document.getElementById('rightBtn');
+            const tiltBtn = document.getElementById('tiltBtn');
+            const muteBtn = document.getElementById('muteBtn');
+
+            const BEST_KEY = "lane_drifter_best_v1";
+            let best = Number(localStorage.getItem(BEST_KEY) || 0);
+            bestEl.textContent = best;
+
+            // ---------- Helpers ----------
+            const rnd = (a, b) => a + Math.random() * (b - a);
+            const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+            const lerp = (a, b, t) => a + (b - a) * t;
+
+            // ---------- Sound ----------
+            let audioCtx = null;
+            let muted = false;
+            function beep(freq = 660, dur = 0.05, type = 'sine', vol = 0.06) {
+                if (muted) return;
+                try {
+                    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const t0 = audioCtx.currentTime;
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.type = type; o.frequency.setValueAtTime(freq, t0);
+                    g.gain.setValueAtTime(0, t0);
+                    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+                    g.gain.linearRampToValueAtTime(0, t0 + dur);
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.start(t0); o.stop(t0 + dur + 0.02);
+                } catch (e) { }
+            }
+            muteBtn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                muted = !muted;
+                muteBtn.textContent = muted ? "🔇" : "🔊";
+                if (!muted) beep(880, 0.04, 'triangle', 0.05);
+            }, { passive: false });
+
+            // ---------- Controls ----------
+            let holdLeft = false, holdRight = false;
+
+            function bindHold(el, down, up) {
+                el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); down(); }, { passive: false });
+                el.addEventListener('pointerup', (e) => { e.preventDefault(); up(); }, { passive: false });
+                el.addEventListener('pointercancel', (e) => { e.preventDefault(); up(); }, { passive: false });
+            }
+            bindHold(leftBtn, () => holdLeft = true, () => holdLeft = false);
+            bindHold(rightBtn, () => holdRight = true, () => holdRight = false);
+
+            addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') holdLeft = true;
+                if (e.key === 'ArrowRight' || e.key === 'd') holdRight = true;
+            });
+            addEventListener('keyup', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') holdLeft = false;
+                if (e.key === 'ArrowRight' || e.key === 'd') holdRight = false;
+            });
+
+            // Tilt (same reliable pattern as before)
+            let tiltEnabled = false;
+            let tiltX = 0;         // -1..1
+            let tiltSign = 1;      // flip if needed
+            let neutralGamma = null;
+            let lastGamma = 0;
+
+            function setTiltEnabled(v) {
+                tiltEnabled = v;
+                tiltBtn.textContent = tiltEnabled ? "🎛️ Tilt: ON" : "🎛️ Tilt: OFF";
+                neutralGamma = null;
+                if (tiltEnabled) {
+                    setTimeout(() => { neutralGamma = lastGamma; }, 200);
+                }
+            }
+
+            async function requestSensors() {
+                const ask = async (Ev) => {
+                    if (Ev && typeof Ev.requestPermission === 'function') {
+                        const r = await Ev.requestPermission().catch(() => "denied");
+                        return r === "granted";
+                    }
+                    return true;
+                };
+                const ok1 = await ask(window.DeviceOrientationEvent);
+                const ok2 = await ask(window.DeviceMotionEvent);
+                return ok1 && ok2;
+            }
+
+            tiltBtn.addEventListener('pointerdown', async (e) => {
+                e.preventDefault();
+                if (!tiltEnabled) {
+                    const ok = await requestSensors();
+                    if (!ok) { tiltBtn.textContent = "🎛️ Tilt: BLOCKED"; beep(220, 0.06, 'sawtooth', 0.04); return; }
+                    setTiltEnabled(true);
+                    beep(960, 0.05, 'triangle', 0.05);
+                } else {
+                    setTiltEnabled(false);
+                    beep(440, 0.05, 'triangle', 0.05);
+                }
+            }, { passive: false });
+
+            // double-tap to flip direction if needed
+            tiltBtn.addEventListener('dblclick', () => { tiltSign *= -1; }, { passive: true });
+
+            addEventListener('deviceorientation', (e) => {
+                if (!tiltEnabled) return;
+                if (typeof e.gamma !== 'number') return;
+                lastGamma = e.gamma;
+                if (neutralGamma === null) return;
+
+                const raw = (e.gamma - neutralGamma) * tiltSign;
+                const dead = 3;
+                const g = Math.abs(raw) < dead ? 0 : raw;
+                tiltX = clamp(g / 25, -1, 1);
+            }, { passive: true });
+
+            addEventListener('devicemotion', (e) => {
+                if (!tiltEnabled) return;
+                const a = e.accelerationIncludingGravity;
+                if (!a || typeof a.x !== 'number') return;
+                const raw = a.x * tiltSign;
+                const dead = 0.4;
+                const v = Math.abs(raw) < dead ? 0 : raw;
+                // mix in motion only if orientation seems idle
+                tiltX = clamp(v / 4.5, -1, 1);
+            }, { passive: true });
+
+            // ---------- Game state ----------
+            let running = false;
+            let t = 0;
+            let score = 0;
+
+            const car = {
+                x: 0, y: 0,
+                vx: 0, // lateral velocity
+                w: 34, h: 56,
+                slip: 0 // visual slip angle
+            };
+
+            // Road model: centerline follows a smooth noise made from sine sums
+            let roadPhase = 0;
+            let roadCenter = 0;
+            let roadCenterVel = 0;
+
+            let speed = 360;        // forward speed (scroll)
+            let roadHalf = 140;     // half width
+            const traffic = [];
+            const skid = [];
+
+            function reset() {
+                t = 0; score = 0;
+                speed = 360;
+                roadHalf = Math.min(170, Math.max(120, W * 0.23));
+                roadPhase = 0;
+                roadCenter = W * 0.5;
+                roadCenterVel = 0;
+
+                car.x = W * 0.5;
+                car.y = H * 0.72;
+                car.vx = 0;
+                car.slip = 0;
+
+                traffic.length = 0;
+                skid.length = 0;
+                scoreEl.textContent = "0";
+            }
+
+            function startGame() {
+                overlay.style.display = 'none';
+                running = true;
+                reset();
+                beep(660, 0.05, 'sine', 0.06);
+            }
+
+            function endGame() {
+                running = false;
+                overlay.style.display = 'flex';
+                best = Math.max(best, score);
+                localStorage.setItem(BEST_KEY, String(best));
+                bestEl.textContent = best;
+                beep(180, 0.10, 'sawtooth', 0.05);
+                beep(120, 0.12, 'sawtooth', 0.05);
+            }
+
+            overlay.addEventListener('pointerdown', (e) => { e.preventDefault(); startGame(); }, { passive: false });
+            canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!running) startGame(); }, { passive: false });
+
+            function spawnTraffic() {
+                // spawn in a lane offset from road center
+                const laneCount = 3;
+                const laneW = (roadHalf * 2) / laneCount;
+                const lane = Math.floor(rnd(0, laneCount));
+                const x = roadCenter - roadHalf + laneW * (lane + 0.5) + rnd(-laneW * 0.12, laneW * 0.12);
+                traffic.push({
+                    x, y: -80,
+                    w: rnd(30, 36),
+                    h: rnd(52, 64),
+                    vy: speed * rnd(0.78, 0.92), // slower than player -> feels like overtaking
+                    hue: rnd(0, 360)
+                });
+            }
+
+            // ---------- Drawing ----------
+            function drawBackground(dt) {
+                // sky / city night
+                const g = ctx.createLinearGradient(0, 0, 0, H);
+                g.addColorStop(0, '#071026');
+                g.addColorStop(1, '#050814');
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, W, H);
+
+                // distant lights
+                ctx.globalAlpha = 0.12;
+                for (let i = 0;i < 40;i++) {
+                    const x = (i * 83 + t * 90) % W;
+                    const y = (i * 41 + t * 25) % H;
+                    ctx.fillStyle = '#eaf0ff';
+                    ctx.fillRect(x, y, 2, 2);
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            function roadCenterAt(y) {
+                // a little extra curve deeper in screen to look twisty
+                const depth = (1 - y / H);
+                const curve = roadCenter + roadCenterVel * (0.12 * H) * depth;
+                return curve;
+            }
+
+            function drawRoad() {
+                // draw road as a series of horizontal strips
+                const strips = 40;
+                const stripH = H / strips;
+
+                for (let i = 0;i < strips;i++) {
+                    const y0 = i * stripH;
+                    const y1 = y0 + stripH + 1;
+
+                    const p = (i / (strips - 1));
+                    const yc = lerp(H * 0.2, H, p);
+                    const c = roadCenterAt(yc);
+
+                    // perspective: road appears wider near bottom
+                    const widen = lerp(0.7, 1.25, p);
+                    const half = roadHalf * widen;
+
+                    // asphalt
+                    ctx.fillStyle = '#101625';
+                    ctx.fillRect(c - half, y0, half * 2, stripH + 2);
+
+                    // shoulder
+                    ctx.globalAlpha = 0.9;
+                    ctx.fillStyle = '#0b1020';
+                    ctx.fillRect(c - half - 20 * widen, y0, 20 * widen, stripH + 2);
+                    ctx.fillRect(c + half, y0, 20 * widen, stripH + 2);
+                    ctx.globalAlpha = 1;
+
+                    // lane markers (3 lanes)
+                    const laneCount = 3;
+                    const laneW = (half * 2) / laneCount;
+
+                    ctx.globalAlpha = 0.35;
+                    ctx.fillStyle = '#eaf0ff';
+                    for (let L = 1;L < laneCount;L++) {
+                        const xx = c - half + laneW * L;
+                        // dashed segments
+                        const dash = ((t * speed * 0.02 + y0) % 60);
+                        if (dash < 30) {
+                            ctx.fillRect(xx - 2, y0, 4, stripH + 2);
+                        }
+                    }
+                    ctx.globalAlpha = 1;
+
+                    // edge lines
+                    ctx.globalAlpha = 0.55;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(c - half - 3, y0, 3, stripH + 2);
+                    ctx.fillRect(c + half, y0, 3, stripH + 2);
+                    ctx.globalAlpha = 1;
+                }
+            }
+
+            function drawSkid() {
+                ctx.globalAlpha = 0.35;
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                for (const s of skid) {
+                    ctx.beginPath();
+                    ctx.moveTo(s.x1, s.y1);
+                    ctx.lineTo(s.x2, s.y2);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            function drawTrafficCar(o) {
+                ctx.save();
+                ctx.translate(o.x, o.y);
+                ctx.fillStyle = `hsl(${o.hue} 70% 55%)`;
+                ctx.beginPath();
+                ctx.roundRect(-o.w / 2, -o.h / 2, o.w, o.h, 8);
+                ctx.fill();
+
+                // windshield
+                ctx.globalAlpha = 0.25;
+                ctx.fillStyle = '#cfe8ff';
+                ctx.fillRect(-o.w * 0.35, -o.h * 0.35, o.w * 0.7, o.h * 0.25);
+                ctx.globalAlpha = 1;
+
+                // lights
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = '#ffd600';
+                ctx.fillRect(-o.w * 0.35, o.h * 0.35, o.w * 0.25, 4);
+                ctx.fillRect(o.w * 0.10, o.h * 0.35, o.w * 0.25, 4);
+                ctx.globalAlpha = 1;
+
+                ctx.restore();
+            }
+
+            function drawPlayerCar() {
+                ctx.save();
+                ctx.translate(car.x, car.y);
+
+                // visual "drift" / slip angle
+                const angle = clamp(car.slip * 0.9, -0.6, 0.6);
+                ctx.rotate(angle);
+
+                // body
+                ctx.fillStyle = '#00e5ff';
+                ctx.beginPath();
+                ctx.roundRect(-car.w / 2, -car.h / 2, car.w, car.h, 10);
+                ctx.fill();
+
+                // roof
+                ctx.globalAlpha = 0.22;
+                ctx.fillStyle = '#cfe8ff';
+                ctx.beginPath();
+                ctx.roundRect(-car.w * 0.28, -car.h * 0.18, car.w * 0.56, car.h * 0.35, 8);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // wheels
+                ctx.fillStyle = '#111';
+                const ww = car.w * 0.22, wh = car.h * 0.18;
+                ctx.fillRect(-car.w * 0.56, -car.h * 0.30, ww, wh);
+                ctx.fillRect(car.w * 0.34, -car.h * 0.30, ww, wh);
+                ctx.fillRect(-car.w * 0.56, car.h * 0.12, ww, wh);
+                ctx.fillRect(car.w * 0.34, car.h * 0.12, ww, wh);
+
+                // headlights
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = '#eaf0ff';
+                ctx.fillRect(-car.w * 0.30, -car.h * 0.52, car.w * 0.25, 5);
+                ctx.fillRect(car.w * 0.05, -car.h * 0.52, car.w * 0.25, 5);
+                ctx.globalAlpha = 1;
+
+                ctx.restore();
+            }
+
+            // polyfill for roundRect on older browsers
+            if (!CanvasRenderingContext2D.prototype.roundRect) {
+                CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+                    r = Math.min(r, w / 2, h / 2);
+                    this.beginPath();
+                    this.moveTo(x + r, y);
+                    this.arcTo(x + w, y, x + w, y + h, r);
+                    this.arcTo(x + w, y + h, x, y + h, r);
+                    this.arcTo(x, y + h, x, y, r);
+                    this.arcTo(x, y, x + w, y, r);
+                    this.closePath();
+                    return this;
+                };
+            }
+
+            function collide(a, b) {
+                // simple AABB
+                return Math.abs(a.x - b.x) < (a.w + b.w) * 0.42 &&
+                    Math.abs(a.y - b.y) < (a.h + b.h) * 0.42;
+            }
+
+            // ---------- Loop ----------
+            let last = performance.now();
+            function step(now) {
+                const dt = Math.min(0.033, (now - last) / 1000);
+                last = now;
+
+                drawBackground(dt);
+
+                // Update road (centerline) even when not running for nice menu motion
+                t += dt;
+
+                if (running && document.visibilityState === 'visible') {
+                    // Increase speed slowly
+                    speed = Math.min(740, speed + dt * 10);
+
+                    // Road curvature: sum of sines for smooth, twisty movement
+                    roadPhase += dt * (0.9 + speed / 900);
+                    const target = W * 0.5
+                        + Math.sin(roadPhase * 0.9) * (W * 0.18)
+                        + Math.sin(roadPhase * 1.7 + 1.8) * (W * 0.10)
+                        + Math.sin(roadPhase * 2.6 + 0.3) * (W * 0.06);
+
+                    // smooth center + add inertia to road itself
+                    roadCenterVel += (target - roadCenter) * dt * 2.2;
+                    roadCenterVel *= (1 - dt * 2.8);
+                    roadCenter += roadCenterVel * dt * 3.0;
+
+                    // Controls -> steer value
+                    let steer = 0;
+                    if (holdLeft) steer -= 1;
+                    if (holdRight) steer += 1;
+                    if (tiltEnabled) steer += tiltX;
+                    steer = clamp(steer, -1, 1);
+
+                    // "Drift feel": acceleration with strong inertia
+                    const accel = 1400;
+                    const drag = 5.5;
+
+                    car.vx += steer * accel * dt;
+
+                    // road pulls you toward center (like banking), creates drift challenge on curves
+                    const roadC = roadCenterAt(car.y);
+                    const pull = (roadC - car.x) * 0.7; // tweak feel
+                    car.vx += pull * dt;
+
+                    // drag
+                    car.vx -= car.vx * drag * dt;
+
+                    // move
+                    car.x += car.vx * dt;
+
+                    // Keep inside road (soft clamp + penalty feel)
+                    const widen = 1.18;
+                    const half = roadHalf * widen;
+                    const leftEdge = roadC - half + 18;
+                    const rightEdge = roadC + half - 18;
+
+                    if (car.x < leftEdge) { car.x = leftEdge; car.vx *= -0.25; }
+                    if (car.x > rightEdge) { car.x = rightEdge; car.vx *= -0.25; }
+
+                    // Visual slip angle based on lateral speed
+                    car.slip = lerp(car.slip, clamp(car.vx / 520, -1, 1), 1 - Math.exp(-dt * 10));
+
+                    // Skid marks when slipping a lot
+                    if (Math.abs(car.slip) > 0.45 && Math.random() < dt * 18) {
+                        skid.push({
+                            x1: car.x - 8, y1: car.y + 18,
+                            x2: car.x - 10 - car.slip * 14, y2: car.y + 40
+                        });
+                        skid.push({
+                            x1: car.x + 8, y1: car.y + 18,
+                            x2: car.x + 10 - car.slip * 14, y2: car.y + 40
+                        });
+                    }
+                    // decay skid
+                    while (skid.length > 120) skid.shift();
+
+                    // Spawn traffic
+                    if (traffic.length < 6 && Math.random() < dt * (0.9 + speed / 700)) {
+                        spawnTraffic();
+                    }
+
+                    // Update traffic
+                    for (let i = traffic.length - 1;i >= 0;i--) {
+                        const o = traffic[i];
+                        o.y += (speed - o.vy) * dt; // relative motion
+                        // keep roughly in road corridor
+                        const c = roadCenterAt(o.y);
+                        o.x += (c - o.x) * dt * 0.35;
+
+                        if (o.y > H + 90) traffic.splice(i, 1);
+                        else {
+                            // collision check
+                            const a = { x: car.x, y: car.y, w: car.w, h: car.h };
+                            const b = { x: o.x, y: o.y, w: o.w, h: o.h };
+                            if (collide(a, b)) {
+                                endGame();
+                                break;
+                            }
+                        }
+                    }
+
+                    // Score = survival distance
+                    score += dt * (speed / 80);
+                    const sInt = Math.floor(score);
+                    scoreEl.textContent = String(sInt);
+                    if (sInt % 20 === 0 && sInt !== 0 && Math.random() < 0.02) beep(520, 0.03, 'triangle', 0.03);
+                } else {
+                    // idle road movement for menu
+                    roadPhase += dt * 0.6;
+                    const target = W * 0.5 + Math.sin(roadPhase * 0.9) * (W * 0.12);
+                    roadCenter = lerp(roadCenter, target, 1 - Math.exp(-dt * 1.5));
+                    roadCenterVel *= (1 - dt * 2);
+                }
+
+                // Draw road + skid + traffic + player
+                drawRoad();
+                drawSkid();
+                for (const o of traffic) drawTrafficCar(o);
+                drawPlayerCar();
+
+                requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        })();
+    </script>
 </body>
+
 </html>
