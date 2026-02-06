@@ -146,6 +146,7 @@
         <div style="opacity:.75;margin-top:6px"><span id="dbg"></span></div>
         <div>Score: <b id="score">0</b></div>
         <div>Best: <span id="best">0</span></div>
+        <div>HP: <span id="hp">❤️❤️❤️</span></div>
         <div style="opacity:.8;margin-top:6px">Fly forward • Flowers 🌸 +1 • Avoid hornets 🐝❌</div>
     </div>
 
@@ -198,13 +199,16 @@
             const rightBtn = document.getElementById('rightBtn');
             const tiltBtn = document.getElementById('tiltBtn');
             const muteBtn = document.getElementById('muteBtn');
+            const hpEl = document.getElementById('hp');
             const dbgEl = document.getElementById('dbg');
             dbgEl.textContent += `Version: 6`;
 
             const BEST_KEY = "bee_runner_best_v1";
             let best = Number(localStorage.getItem(BEST_KEY) || 0);
             bestEl.textContent = best;
-
+            const MAX_HP = 3;
+            let hp = MAX_HP;
+            let invuln = 0; // seconds remaining
             // ---------- Helpers ----------
             const rnd = (a, b) => a + Math.random() * (b - a);
             const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -238,7 +242,9 @@
 
             // ---------- Control state ----------
             let holdLeft = false, holdRight = false;
-
+            function renderHP() {
+                hpEl.textContent = "❤️".repeat(hp) + "🖤".repeat(Math.max(0, MAX_HP - hp));
+            }
             function bindHold(el, onDown, onUp) {
                 el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); onDown(); }, { passive: false });
                 el.addEventListener('pointerup', (e) => { e.preventDefault(); onUp(); }, { passive: false });
@@ -359,6 +365,9 @@
                 for (let i = 0;i < 80;i++) {
                     pollen.push({ x: rnd(0, W), y: rnd(0, H), s: rnd(0.5, 2.0) });
                 }
+                hp = MAX_HP;
+                invuln = 0;
+                renderHP();
             }
 
             function startGame() {
@@ -993,7 +1002,7 @@
                 if (running && document.visibilityState === 'visible') {
                     t += dt;
                     difficulty = Math.min(10, t / 16);
-
+                    invuln = Math.max(0, invuln - dt);
                     // speed ramps slowly
                     speed = 260 + difficulty * 20;
 
@@ -1062,9 +1071,27 @@
                         // collision
                         const rr = (bee.r + h.r) * 0.7;
                         if (dist2(bee.x, bee.y, h.x, h.y) < rr * rr) {
-                            endGame();
-                            break;
+                            if (invuln <= 0) {
+                                hp = Math.max(0, hp - 1);
+                                renderHP();
+
+                                // i-frames
+                                invuln = 1.0; // seconds of invulnerability (tweak 0.7..1.2)
+
+                                // hit feedback
+                                beep(120, 0.06, 'sawtooth', 0.06);
+                                beep(90, 0.07, 'sawtooth', 0.05);
+
+                                // optional: knock the bee a bit away from hornet
+                                bee.vx += clamp((bee.x - h.x) * 6, -500, 500);
+
+                                if (hp <= 0) {
+                                    endGame();
+                                    break;
+                                }
+                            }
                         }
+
                         if (h.y > H + 80) hornets.splice(i, 1);
                     }
                 }
@@ -1072,7 +1099,12 @@
                 // ---- Draw entities ----
                 for (const f of flowers) drawFlower(f);
                 for (const h of hornets) drawHornet(h);
-                drawBeeTopDown();
+                if (invuln > 0) {
+                    // blink: draw only on alternating frames
+                    if (Math.floor(t * 18) % 2 === 0) drawBeeTopDown();
+                } else {
+                    drawBeeTopDown();
+                }
 
                 requestAnimationFrame(step);
             }
